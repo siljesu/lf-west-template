@@ -4,3 +4,6 @@ west-commands:
       - name: lf-build
         class: LfBuild
         help: Invoke lfc and then west build
+      - name: lf-fed-build
+        class: LfFedBuild
+        help: Invoke lfc and then west build, tweaked for federated
