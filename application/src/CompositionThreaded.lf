@@ -3,8 +3,8 @@
 target C {
     platform: {
         name: Zephyr,
-        board: qemu_cortex_m3,
-        port: /dev/cu.usbmodem21301
+        board: mimxrt1170_evk_cm7,
+        port: /dev/enp4s0f2
     },
     threading: true,
     workers: 4,
@@ -38,7 +38,7 @@ reactor Test {
     =}
 }
 
-federated reactor CompositionThreaded{
+federated reactor CompositionThreaded at 192.0.2.2:15047{
     s = new Source();
     d = new Test();
     s.y -> d.x;
