@@ -129,8 +129,6 @@ class LfFedBuild(WestCommand):
             print("ERROR: West lf-fed-build must be invoked outside `src` folder")
             
         srcGenPath = args.main_lf.split(".")[0].replace("src", "fed-gen")+"/src-gen"
-        print(f'srcGenPath: {srcGenPath}')
-        print(f'srcGenPath: {"/home/silje/lf-west-app/application/"+srcGenPath}')
 
         appPath = args.main_lf.split("src")[0]
         if appPath == "":
@@ -158,36 +156,36 @@ class LfFedBuild(WestCommand):
             print("Error: Use `--conf-overlays` option to pass config overlays to west")
 
         federateNames = [name for name in os.listdir("./"+srcGenPath)]
-	
-        for fedName in federateNames:
-            # Copy project configurations into src-gen 
-            userConfigPaths="prj.conf"
-            res = subprocess.Popen(f"cp {appPath}/prj.conf {srcGenPath}/{fedName}/", shell=True)
-            if args.conf_overlays:
-                res = subprocess.Popen(f"cp {appPath}/{args.conf_overlays} {srcGenPath}/{fedName}/", shell=True)
-                userConfigPaths += f";{args.conf_overlays}"
 
-            # Copy the Kconfig file into the src-gen directory
-            res = subprocess.Popen(f"cp {appPath}/Kconfig {srcGenPath}/{fedName}/", shell=True)
-            ret = res.wait()
-            if ret != 0:
-                exit(1)
+        # Only one federate will run in Zephyr, and this one needs config files
+        # Copy project configurations into src-gen 
+        userConfigPaths="prj.conf"
+        res = subprocess.Popen(f"cp {appPath}/prj.conf {srcGenPath}/{federateNames[0]}/", shell=True)
+        if args.conf_overlays:
+            res = subprocess.Popen(f"cp {appPath}/{args.conf_overlays} {srcGenPath}/{federateNames[0]}/", shell=True)
+            userConfigPaths += f";{args.conf_overlays}"
 
-            # Parse the generated CompileDefinitions.txt which should be 
-            # forwarded to west
-            compileDefs = ""
-            with open(f"{srcGenPath}/{fedName}/CompileDefinitions.txt") as f:
-                for line in f:
-                    line = line.replace("\n", "")
-                    compileDefs += f"-D{line} "
+        # Copy the Kconfig file into the src-gen directory
+        res = subprocess.Popen(f"cp {appPath}/Kconfig {srcGenPath}/{federateNames[0]}/", shell=True)
+        ret = res.wait()
+        if ret != 0:
+            exit(1)
 
-        # Let file copying finish before attempting to build            
-        for fedName in federateNames:
-            print(compileDefs)
-            # Invoke west in the `src-gen` directory. Pass in 
-            westCmd = f"west build {srcGenPath}/{fedName} {args.west_commands} -- -DOVERLAY_CONFIG=\"{userConfigPaths}\" {compileDefs}"
-            print(f"Executing west command: `{westCmd}`")
-            res = subprocess.Popen(westCmd, shell=True)
-            ret = res.wait()
-            if ret != 0:
-                exit(1)
+        # Parse the generated CompileDefinitions.txt which should be 
+        # forwarded to west
+        compileDefs = ""
+        with open(f"{srcGenPath}/{federateNames[0]}/CompileDefinitions.txt") as f:
+            for line in f:
+                line = line.replace("\n", "")
+                compileDefs += f"-D{line} "
+
+        # Let file copying finish before attempting to build one federate            
+        print(compileDefs)
+        # Invoke west in the `src-gen` directory. Pass in 
+        westCmd = f"west build {srcGenPath}/{federateNames[0]} --build-dir ./zephyr-{federateNames[0]}-build {args.west_commands} -- -DCMAKE_BUILD_TYPE=Test -DOVERLAY_CONFIG=\"{userConfigPaths}\" {compileDefs}"
+        print(f"Executing west command: `{westCmd}`")
+        res = subprocess.Popen(westCmd, shell=True)
+        ret = res.wait()
+        if ret != 0:
+            exit(1)
+
