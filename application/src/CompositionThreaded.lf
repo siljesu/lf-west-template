@@ -2,15 +2,15 @@
 // own count.
 target C {
     platform: {
-        name: Zephyr,
-        board: mimxrt1170_evk_cm7,
-        port: /dev/enp4s0f2
+       name: Zephyr,
+       board: mimxrt1170_evk_cm7,
+       port: /dev/enp4s0f2
     },
     threading: true,
-    workers: 4,
+    workers: 2,
     no-compile: true,
-    fast: true,
-    timeout: 10 sec
+    timeout: 20 sec,
+    //coordination: decentralized
 }
 
 reactor Source(period: time(2 sec)) {
@@ -38,7 +38,7 @@ reactor Test {
     =}
 }
 
-federated reactor CompositionThreaded at 192.0.2.2:15047{
+federated reactor CompositionThreaded at 127.0.0.1:15047{
     s = new Source();
     d = new Test();
     s.y -> d.x;
