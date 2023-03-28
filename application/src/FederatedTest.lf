@@ -1,0 +1,72 @@
+// This test connects a simple counting source to tester that checks against its
+// own count.
+target C {
+    platform: {
+       name: Zephyr,
+       board: mimxrt1170_evk_cm7,
+       port: /dev/enp4s0f2
+    },
+    threading: true,
+    workers: 2,
+    no-compile: true,
+    //coordination: decentralized
+}
+
+preamble {=
+    #include <zephyr/kernel.h>
+    #include <zephyr/drivers/gpio.h>
+    #define LED0_NODE DT_ALIAS(led0)
+    #define LED1_NODE DT_ALIAS(led1)
+    static const struct gpio_dt_spec led0 = GPIO_DT_SPEC_GET(LED0_NODE, gpios);
+    static const struct gpio_dt_spec led1 = GPIO_DT_SPEC_GET(LED1_NODE, gpios);
+=}
+
+reactor Source(period: time(1 sec)) {
+    output y:bool
+    timer t(1 sec, period)
+    state count: int(0)
+
+    reaction(t) -> y {=
+        (self->count)++;
+        gpio_pin_toggle_dt(&led1);
+        if (self->count == 5) {
+            gpio_pin_toggle_dt(&led0);
+            lf_set(y, true);
+            self->count = 0;
+        } else {
+            gpio_pin_toggle_dt(&led0);
+        }
+    =}
+}
+
+reactor Test(period: time(1 sec)) {
+    input x:bool
+    timer t(1 sec, period)
+    state count: int(0)
+
+    reaction(t) {=
+        (self->count)++;
+        gpio_pin_toggle_dt(&led1);
+        if (self->count == 5) {
+            self->count = 0;
+        } else {
+            gpio_pin_toggle_dt(&led0);
+        }
+    =}
+
+    reaction(x) {=
+        gpio_pin_toggle_dt(&led0);
+    =}
+}
+
+federated reactor FederatedTest at 127.0.0.1:15047{
+    s = new Source();
+    d = new Test();
+    s.y -> d.x;
+
+    reaction(startup) {=
+        assert(device_is_ready(led.port));
+        gpio_pin_configure_dt(&led0, GPIO_OUTPUT_ACTIVE);
+        gpio_pin_configure_dt(&led1, GPIO_OUTPUT_ACTIVE);
+    =}
+}
