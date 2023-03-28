@@ -171,6 +171,12 @@ class LfFedBuild(WestCommand):
             if ret != 0:
                 print(f"Warning: Could not find federate config file {userConfigPaths}, using default config file only.")
                 userConfigPaths=""
+                
+            res = subprocess.Popen(f"cp {appPath}/mimxrt1170_evk_cm7.overlay {srcGenPath}/{fedName}/boards/", shell=True)
+            ret = res.wait()
+            if ret != 0:
+                print(f"Warning: Could not find federate dts overlay file.")
+                
             if args.conf_overlays:
                 res = subprocess.Popen(f"cp {appPath}/{args.conf_overlays} {srcGenPath}/{fedName}/", shell=True)
                 userConfigPaths += f";{args.conf_overlays}"
