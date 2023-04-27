@@ -1,0 +1,22 @@
+//#include "mimxrt1170_evk-pinctrl.dtsi"
+/// { 
+//	aliases {
+//		led2 = &red_led;
+//	};
+//	leds {
+//		compatible = "gpio-leds";
+//		red_led : led-2 {
+//			gpios = < &gpio9 0x19 GPIO_ACTIVE_HIGH >;
+//			label = "User LED D34";
+//			status = "okay";
+//		};
+//	};
+//	aliases {
+//                pwmled = &green_pwm_led;
+//        };
+//};
+	&enet {
+		local-mac-address = [00 0a 35 00 00 01];
+		status = "okay";
+	};
+//};
