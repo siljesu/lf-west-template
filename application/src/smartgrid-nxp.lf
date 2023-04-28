@@ -162,6 +162,11 @@ reactor CircuitStatus {
 reactor VoltageSensor(id:int(0)) {
 
     preamble{=
+
+        #include <zephyr/kernel.h>
+        #include <zephyr/drivers/gpio.h>
+        static const struct gpio_dt_spec led2 = GPIO_DT_SPEC_GET(DT_PATH(leds,led_2), gpios);
+
         #define VOLTAGE_LIMIT 14000U
 
         // Voltage measurement timeseries
@@ -181,6 +186,12 @@ reactor VoltageSensor(id:int(0)) {
     output startCountdown:int
     state measCount:int(0)
 
+    reaction(startup){=
+        assert(device_is_ready(led2.port));
+        gpio_pin_configure_dt(&led2, GPIO_OUTPUT_ACTIVE);
+        gpio_pin_set_dt(&led2, 0);
+    =}
+
     reaction(t) -> measOut, startCountdown {=
 
         // Read simulated measurement 
@@ -193,7 +204,7 @@ reactor VoltageSensor(id:int(0)) {
 
         // Check if short circuit has occured on the line
         if (voltageMeasurement < VOLTAGE_LIMIT) {
-            
+            gpio_pin_set_dt(&led2, 1);
             // A fault has occured, let other nodes know
             printf("Measurement was under limit.\n");
             lf_set(startCountdown, 1);
