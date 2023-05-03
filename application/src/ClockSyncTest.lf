@@ -1,0 +1,60 @@
+// This test connects a simple counting source to tester that checks against its
+// own count.
+target C {
+    platform: {
+       name: Zephyr,
+       board: mimxrt1170_evk_cm7,
+       port: /dev/enp4s0f2
+    },
+    threading: true,
+    workers: 2,
+    no-compile: true,
+    //coordination: decentralized
+}
+
+preamble {=
+    #include <zephyr/kernel.h>
+    #include <zephyr/drivers/gpio.h>
+    #define LED0_NODE DT_ALIAS(led0)
+    static const struct gpio_dt_spec led = GPIO_DT_SPEC_GET(LED0_NODE, gpios);
+=}
+
+reactor Source(period: time(2 sec)) {
+    output y: int
+    timer t(1 sec, period)
+    state count: int(0)
+
+    reaction(t) -> y {=
+        gpio_pin_toggle_dt(&led);
+
+        (self->count)++;
+        lf_set(y, self->count);
+    =}
+}
+
+reactor Test {
+    input x: int
+    state count: int(0)
+
+    reaction(x) {=
+        gpio_pin_toggle_dt(&led);
+
+        (self->count)++;
+        printf("Received %d\n", x->value);
+        if (x->value != self->count) {
+            printf("FAILURE: Expected %d\n", self->count);
+            exit(1);
+        }
+    =}
+}
+
+federated reactor ClockSyncTest at 192.0.2.2:15047{
+    s = new Source();
+    d = new Test();
+    s.y -> d.x;
+
+    reaction(startup) {=
+        assert(device_is_ready(led.port));
+        gpio_pin_configure_dt(&led, GPIO_OUTPUT_ACTIVE);
+    =}
+}

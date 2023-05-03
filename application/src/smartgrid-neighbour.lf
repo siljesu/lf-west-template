@@ -159,6 +159,26 @@ reactor CircuitStatus {
     =}
 }
 
+
+reactor VoltageReportCollector {
+
+    input distributedDecision:int
+    input countdown:int
+    logical action breakCircuit;
+    state[4] collectedVoltages:int;
+
+    reaction(startup){=
+        assert(device_is_ready(led.port));
+        gpio_pin_configure_dt(&led, GPIO_OUTPUT_ACTIVE);
+    =}
+
+    reaction(countdown) -> breakCircuit {=
+        printf("Starting countdown to automatic open relay (breaking circuit). 5 sec.\n");
+        self->faultHandledElsewhere = 0;
+        lf_schedule(breakCircuit, MSEC(150));
+    =}
+}
+
 reactor VoltageSensor(id:int(0)) {
 
     preamble{=
@@ -182,7 +202,7 @@ reactor VoltageSensor(id:int(0)) {
     =}
 
     timer t(0, 1 sec);
-    output[4] measOut:int
+    output measOut:int
     output startCountdown:int
     state measCount:int(0)
 
@@ -208,11 +228,7 @@ reactor VoltageSensor(id:int(0)) {
             // A fault has occured, let other nodes know
             printf("Measurement was under limit.\n");
             lf_set(startCountdown, 1);
-            for (int i = 0; i < 4; i++) {
-                lf_set(measOut[i], voltageMeasurement);
-                //etter reaksjon settes dette ^
-                // ny reaktor som kalles network som simulerer forsinkelse
-            }
+            lf_set(measOut, voltageMeasurement);
         }
     =}
 }
@@ -229,6 +245,7 @@ reactor RelayUnit(id:int(0)) {
     distAlg = new DistAlg(ownId = id);
 
     voltageSensor.measOut -> voltageReportOut;
+    voltageSensor.measOut -> distAlg.voltageReportIn[id];
     voltageSensor.startCountdown -> circuitStatus.countdown;
 
     voltageReportAIn -> distAlg.voltageReportAIn;
@@ -247,23 +264,13 @@ federated reactor at 192.0.2.2:15047 {
     unitC = new RelayUnit(id = 2);
     unitD = new RelayUnit(id = 3);
 
-    unitA.voltageReportOut -> unitA.voltageReportAIn, 
-                              unitB.voltageReportAIn, 
-                              unitC.voltageReportAIn, 
-                              unitD.voltageReportAIn after 100 msec;
+    unitA.voltageReportOut -> unitB.voltageReportAIn after 100 msec;
 
-    unitB.voltageReportOut -> unitA.voltageReportBIn, 
-                              unitB.voltageReportBIn, 
-                              unitC.voltageReportBIn, 
-                              unitD.voltageReportBIn after 100 msec;
+    unitB.voltageReportOut -> unitA.voltageReportBIn after 100 msec;
+    unitB.voltageReportOut -> unitC.voltageReportBIn after 100 msec;
 
-    unitC.voltageReportOut -> unitA.voltageReportCIn, 
-                              unitB.voltageReportCIn, 
-                              unitC.voltageReportCIn, 
-                              unitD.voltageReportCIn after 100 msec;
+    unitC.voltageReportOut -> unitB.voltageReportCIn after 100 msec; 
+    unitC.voltageReportOut -> unitD.voltageReportCIn after 100 msec;
 
-    unitD.voltageReportOut -> unitA.voltageReportDIn, 
-                              unitB.voltageReportDIn, 
-                              unitC.voltageReportDIn, 
-                              unitD.voltageReportDIn after 100 msec;
+    unitD.voltageReportOut -> unitC.voltageReportDIn after 100 msec;
 }

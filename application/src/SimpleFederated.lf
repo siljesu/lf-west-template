@@ -10,9 +10,16 @@ target C {
     //coordination: decentralized
 }
 
-main reactor {
-    reaction(startup) {=
-        printf("Hello World\n");
-    =}
+
+reactor Fed {
+    input in: int
+    output out: int
 }
 
+federated reactor at 192.0.2.1:15047 {
+    s = new Fed();
+    d = new Fed();
+
+    s.out -> d.in
+    d.out -> s.in
+}

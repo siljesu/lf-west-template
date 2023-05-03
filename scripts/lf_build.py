@@ -172,7 +172,7 @@ class LfFedBuild(WestCommand):
                 print(f"Warning: Could not find federate config file {userConfigPaths}, using default config file only.")
                 userConfigPaths=""
                 
-            res = subprocess.Popen(f"cp {appPath}/mimxrt1170_evk_cm7.overlay {srcGenPath}/{fedName}/boards/", shell=True)
+            res = subprocess.Popen(f"cp {appPath}/mimxrt1170_evk_cm7_{fedName}.overlay {srcGenPath}/{fedName}/boards/mimxrt1170_evk_cm7.overlay", shell=True)
             ret = res.wait()
             if ret != 0:
                 print(f"Warning: Could not find federate dts overlay file.")
@@ -311,11 +311,11 @@ class LfFedFlash(WestCommand):
                     print(f"\nError: flash failed")
                     exit(1)
                             
-            rtiCmd = f"RTI -n 2 -p 15047 -i \"Unidentified Federation\""
-            res = subprocess.Popen(rtiCmd, shell=True)
-            ret = res.wait()
-            if ret != 0:
-                exit(1)
+            #rtiCmd = f"RTI -n 2 -p 15047 -i \"Unidentified Federation\""
+            #res = subprocess.Popen(rtiCmd, shell=True)
+            #ret = res.wait()
+            #if ret != 0:
+            #    exit(1)
                 
         # elif args.mode == "3":
         # elif args.mode == "4":

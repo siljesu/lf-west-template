@@ -10,13 +10,13 @@ target C {
     workers: 2,
     no-compile: true,
     timeout: 10 sec,
-
+    coordination: decentralized,
 }
 
-reactor Source(period: time = 2 sec) {
+reactor Source(period: time(2 sec)) {
     output y: int
     timer t(1 sec, period)
-    state count: int = 0
+    state count: int(0)
 
     reaction(t) -> y {=
         (self->count)++;
@@ -25,31 +25,8 @@ reactor Source(period: time = 2 sec) {
 }
 
 reactor Test {
-    preamble {=
-        void func() {
-            int count = 5;
-            while(count > 0) {
-                printf("inside thread\n");
-                count--;
-            }
-        }
-    =}
     input x: int
-    state count: int = 0
-
-    reaction(startup){=
-        int thread_id1;
-        int thread_id2;
-        int result;
-        result = lf_thread_create(&thread_id1, func, NULL);
-        if (result != 0) {
-            printf("\nThread creation failed.\n\n");
-        }
-        result = lf_thread_create(&thread_id2, func, NULL);
-        if (result != 0) {
-            printf("\nThread creation failed.\n\n");
-        }
-    =}
+    state count: int(0)
 
     reaction(x) {=
         (self->count)++;
@@ -61,7 +38,7 @@ reactor Test {
     =}
 }
 
-main reactor CompositionThreaded{
+federated reactor at 192.0.2.1:15047 {
     s = new Source();
     d = new Test();
     s.y -> d.x;

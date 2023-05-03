@@ -1,0 +1,70 @@
+target C {
+    platform: {
+        name: Zephyr,
+        board: mimxrt1170_evk_cm7,
+        port: /dev/enp4s0f2
+     },
+     threading: true,
+     workers: 2,
+     no-compile: true,
+     //coordination: decentralized
+}
+
+reactor Source(period: time(2 sec), iterations:int(10)) {
+    preamble{=
+        #include <zephyr/kernel.h>
+        #include <zephyr/drivers/gpio.h>
+        static const struct gpio_dt_spec gpio = GPIO_DT_SPEC_GET(DT_PATH(ad_06), gpios);
+
+    =}
+    output y: int
+    timer t(1 sec, period)
+    state count: int(0)
+
+    reaction(startup) {=
+        assert(device_is_ready(gpio.port));
+        gpio_pin_configure_dt(&gpio, GPIO_OUTPUT_ACTIVE);
+        gpio_pin_set_dt(&gpio, 0);
+    =}
+
+    reaction(t) -> y {=
+        (self->count)++;
+        lf_set(y, lf_time_physical());
+    =}
+}
+
+reactor Test(iterations:int(10)) {
+    preamble{=
+        #include <zephyr/kernel.h>
+        #include <zephyr/drivers/gpio.h>
+        static const struct gpio_dt_spec gpio = GPIO_DT_SPEC_GET(DT_PATH(ad_06), gpios);
+
+    =}
+    input x: int
+    state count: int(0)
+    state total: int(0)
+
+    reaction(startup) {=
+        assert(device_is_ready(gpio.port));
+        gpio_pin_configure_dt(&gpio, GPIO_OUTPUT_ACTIVE);
+        gpio_pin_set_dt(&gpio, 0);
+    =}
+
+    reaction(x) {=
+        (self->count)++;
+        self->total += (lf_time_physical() - x->value);
+        if (self->count == self->iterations) {
+            lf_request_stop();
+        }
+    =}
+    reaction(shutdown){=
+        float result = self->total/self->count;
+        printf("Test average result: %f\n", result);
+    =}
+}
+
+federated reactor distributedTest at 192.0.2.2:15047 {
+    s = new Source(period = 1 msec, iterations = 2000);
+    d = new Test(iterations=2000);
+    s.y -> d.x;
+}
