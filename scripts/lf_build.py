@@ -122,6 +122,7 @@ class LfFedBuild(WestCommand):
         parser.add_argument('-w', '--west-commands', help='Arguments to forward to west')
         parser.add_argument('-c', '--conf-overlays', help='Additional configuration overlays')
         parser.add_argument('-n', '--no-lfc', action='store_true', help='Do not generate new code using lfc')
+        parser.add_argument('-f', '--federate', nargs='+', help='Build only specified federate')
         parser.add_argument('--lfc', help='Path to LFC binary')
 
         return parser           # gets stored as self.parser
@@ -164,6 +165,8 @@ class LfFedBuild(WestCommand):
         federateNames = [name for name in os.listdir("./"+srcGenPath)]
 
         for fedName in federateNames:
+            if args.federate and fedName not in args.federate:
+                continue
             # Copy project configurations into src-gen 
             userConfigPaths=f"prj_{fedName}.conf"
             res = subprocess.Popen(f"cp {appPath}/prj_{fedName}.conf {srcGenPath}/{fedName}/", shell=True)
@@ -196,6 +199,8 @@ class LfFedBuild(WestCommand):
                     compileDefs += f"-D{line} "
                         
         for fedName in federateNames:
+            if args.federate and fedName not in args.federate:
+                continue
             # Let file copying finish before attempting to build one federate            
             print(compileDefs)
             # Invoke west in the `src-gen` directory. Pass in 

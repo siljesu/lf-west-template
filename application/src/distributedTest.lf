@@ -14,57 +14,66 @@ reactor Source(period: time(2 sec), iterations:int(10)) {
     preamble{=
         #include <zephyr/kernel.h>
         #include <zephyr/drivers/gpio.h>
-        static const struct gpio_dt_spec gpio = GPIO_DT_SPEC_GET(DT_PATH(ad_06), gpios);
 
+        static const struct gpio_dt_spec led1 = GPIO_DT_SPEC_GET(DT_ALIAS(led0), gpios);
     =}
     output y: int
     timer t(1 sec, period)
     state count: int(0)
 
     reaction(startup) {=
-        assert(device_is_ready(gpio.port));
-        gpio_pin_configure_dt(&gpio, GPIO_OUTPUT_ACTIVE);
-        gpio_pin_set_dt(&gpio, 0);
+        assert(device_is_ready(led1.port));
+        gpio_pin_configure_dt(&led1, GPIO_OUTPUT_ACTIVE);
+        gpio_pin_set_dt(&led1, 1);
     =}
 
     reaction(t) -> y {=
         (self->count)++;
-        lf_set(y, lf_time_physical());
-    =}
-}
-
-reactor Test(iterations:int(10)) {
-    preamble{=
-        #include <zephyr/kernel.h>
-        #include <zephyr/drivers/gpio.h>
-        static const struct gpio_dt_spec gpio = GPIO_DT_SPEC_GET(DT_PATH(ad_06), gpios);
-
-    =}
-    input x: int
-    state count: int(0)
-    state total: int(0)
-
-    reaction(startup) {=
-        assert(device_is_ready(gpio.port));
-        gpio_pin_configure_dt(&gpio, GPIO_OUTPUT_ACTIVE);
-        gpio_pin_set_dt(&gpio, 0);
-    =}
-
-    reaction(x) {=
-        (self->count)++;
-        self->total += (lf_time_physical() - x->value);
+        gpio_pin_toggle_dt(&led1);
+        lf_set(y, self->count);
         if (self->count == self->iterations) {
             lf_request_stop();
         }
     =}
-    reaction(shutdown){=
-        float result = self->total/self->count;
-        printf("Test average result: %f\n", result);
+
+    reaction(shutdown) {=
+        printf("Finished %u iterations. Requesting stop.\n", self->count);
+    =}
+}
+
+reactor Test {
+    preamble{=
+        #include <zephyr/kernel.h>
+        #include <zephyr/drivers/gpio.h>
+
+        static const struct gpio_dt_spec led1 = GPIO_DT_SPEC_GET(DT_ALIAS(led0), gpios);
+    =}
+    input x: int
+    state count: int(0)
+
+    reaction(startup) {=
+        assert(device_is_ready(led1.port));
+        gpio_pin_configure_dt(&led1, GPIO_OUTPUT_ACTIVE);
+        gpio_pin_set_dt(&led1, 1);
+    =}
+
+    reaction(x) {=
+        (self->count)++;
+        if (self->count != x->value) {
+            printf("Received wrong message: %u. Expected: %u. Requesting stop.\n", x->value, self->count);
+            lf_request_stop();
+        } else {
+            gpio_pin_toggle_dt(&led1);
+        }
+    =}
+
+    reaction(shutdown) {=
+        printf("Finished %u iterations. Stopping.\n", self->count);
     =}
 }
 
 federated reactor distributedTest at 192.0.2.2:15047 {
-    s = new Source(period = 1 msec, iterations = 2000);
-    d = new Test(iterations=2000);
+    s = new Source(period = 1 sec, iterations = 20);
+    d = new Test();
     s.y -> d.x;
 }

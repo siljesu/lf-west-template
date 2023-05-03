@@ -8,15 +8,6 @@
 	};
 };
 
-&gpio9 {
-	compatible = "nxp,imx-gpio";
-	ad-06 {
-		gpios = < &gpio9 5 GPIO_ACTIVE_HIGH >;
-		label = "GPIO9 AD 06";
-		status = "okay";
-	};
-};
-
 &enet {
 	local-mac-address = [00 0a 35 00 00 01];
 	status = "okay";
