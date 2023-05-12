@@ -7,7 +7,6 @@ target C {
     no-compile: true,
     coordination: decentralized,
     workers: 2,
-    timeout: 6 sec,
 }
 
 
@@ -42,10 +41,10 @@ reactor DistAlg(ownId:int(0)) {
 
         int localAction(int closestRelays[], int ownId) {
             if (ownId == closestRelays[0] || ownId == closestRelays[1]) {
-                printf("This relay should open, disconnecting the grid.\n");
+                //printf("This relay should open, disconnecting the grid.\n");
                 return 1;
             } else {
-                printf("This relay should close, connecting the grid.\n");
+                //printf("This relay should close, connecting the grid.\n");
                 return 0;
             }
         }
@@ -65,37 +64,37 @@ reactor DistAlg(ownId:int(0)) {
 
     reaction(voltageReportAIn, voltageReportBIn, voltageReportCIn, voltageReportDIn) -> distributedDecision {=
         bool result = 1; // default open
-        printf("Entering algorithm.\n");
+        //printf("Entering algorithm.\n");
         
         //debugging
-        if (voltageReportAIn->is_present) {
-            printf("Input from A was present.\n");
-        } else {
-            printf("Input from A was not present.\n");
-        }
+        // if (voltageReportAIn->is_present) {
+        //     printf("Input from A was present.\n");
+        // } else {
+        //     printf("Input from A was not present.\n");
+        // }
 
-        if (voltageReportBIn->is_present) {
-            printf("Input from B was present.\n");
-        } else {
-            printf("Input from B was not present.\n");
-        }
+        // if (voltageReportBIn->is_present) {
+        //     printf("Input from B was present.\n");
+        // } else {
+        //     printf("Input from B was not present.\n");
+        // }
 
-        if (voltageReportCIn->is_present) {
-            printf("Input from C was present.\n");
-        } else {
-            printf("Input from C was not present.\n");
-        }
+        // if (voltageReportCIn->is_present) {
+        //     printf("Input from C was present.\n");
+        // } else {
+        //     printf("Input from C was not present.\n");
+        // }
 
-        if (voltageReportDIn->is_present) {
-            printf("Input from D was present.\n");
-        } else {
-            printf("Input from D was not present.\n");
-        }
+        // if (voltageReportDIn->is_present) {
+        //     printf("Input from D was present.\n");
+        // } else {
+        //     printf("Input from D was not present.\n");
+        // }
 
         if (voltageReportAIn->is_present && voltageReportBIn->is_present && voltageReportCIn->is_present && voltageReportDIn->is_present) {
             int voltageReports[4] = {voltageReportAIn->value, voltageReportBIn->value, voltageReportCIn->value, voltageReportDIn->value};
             result = decideLocalAction(voltageReports, self->ownId, 4);
-            printf("Setting relay %u to %u (1=open,0=close)\n", self->ownId, result);
+            //printf("Setting relay %u to %u (1=open,0=close)\n", self->ownId, result);
             lf_set(distributedDecision, result);
         }
     =} STP(0) {=
@@ -124,7 +123,7 @@ reactor CircuitStatus {
     input distributedDecision:int
     input countdown:int
     logical action breakCircuit;
-    state faultHandledElsewhere:int;
+    state faultHandled:int;
 
     reaction(startup){=
         assert(device_is_ready(led.port));
@@ -132,29 +131,30 @@ reactor CircuitStatus {
     =}
 
     reaction(countdown) -> breakCircuit {=
-        printf("Starting countdown to automatic open relay (breaking circuit). 5 sec.\n");
-        self->faultHandledElsewhere = 0;
+        //printf("Starting countdown to automatic open relay (breaking circuit). 5 sec.\n");
+        self->faultHandled = 0;
         lf_schedule(breakCircuit, MSEC(150));
     =}
 
     reaction(breakCircuit) {=
-        if (self->faultHandledElsewhere){
+        if (self->faultHandled){
             // This relay is not the closest to the fault
-            printf("Fault handled elsewhere, so not breaking circuit\n");
+            //printf("Fault handled elsewhere, so not breaking circuit\n");
         } else {
-            printf("Opening relay (breaking circuit).\n");
+            //printf("Opening relay (breaking circuit).\n");
             openCircuit();
         }
     =}
 
     reaction(distributedDecision) -> breakCircuit {=
         if (distributedDecision->value) {
-            printf("Algorithm decided to open this relay, breaking the circuit.\n");
-            lf_schedule(breakCircuit, 0);
+            //printf("Algorithm decided to open this relay, breaking the circuit.\n");
+            openCircuit();
+            self->faultHandled = 1;
         } else {
-            printf("Algorithm decided to close this relay. Fault has been handled by another relay.\n");
-            self->faultHandledElsewhere = 1;
+            //printf("Algorithm decided to close this relay. Fault has been handled by another relay.\n");
             closeCircuit();
+            self->faultHandled = 1;
         }
     =}
 }
@@ -171,18 +171,18 @@ reactor VoltageSensor(id:int(0)) {
         #define VOLTAGE_LIMIT 14000U
 
         // Voltage measurement timeseries
-        int simMeas[4][5] ={{15000,15000,13000,15000,15000},
-                            {15000,15000,12800,15000,15000},
-                            {15000,15000,12500,15000,15000},
-                            {15000,15000,12000,15000,15000}};
+        int simMeas[4][14] ={{15000,15000,13100,15000,15000,15000,15000,15000,15000,15000,15000,15000,15000,15000,15000},
+                            {15000,15000,11000,15000,15000,15000,15000,15000,15000,15000,15000,15000,15000,15000,15000},
+                            {15000,15000,11200,15000,15000,15000,15000,15000,15000,15000,15000,15000,15000,15000,15000},
+                            {15000,15000,12500,15000,15000,15000,15000,15000,15000,15000,15000,15000,15000,15000,15000}};
 
         int readSensor(int id, int count) {
-            printf("Read %u\n", simMeas[id][count]);
+            //printf("Read %u\n", simMeas[id][count]);
             return simMeas[id][count];
         }
     =}
 
-    timer t(0, 1 sec);
+    timer t(1 sec, 100 msec);
     output[4] measOut:int
     output startCountdown:int
     state measCount:int(0)
@@ -200,8 +200,9 @@ reactor VoltageSensor(id:int(0)) {
 
         // Read simulated measurement 
         int voltageMeasurement = readSensor(self->id, self->measCount);
-        if (self->measCount == 4) {
+        if (self->measCount == 13) {
             self->measCount = 0;
+            lf_request_stop();
         } else {
             self->measCount++;
         }
@@ -211,7 +212,7 @@ reactor VoltageSensor(id:int(0)) {
             gpio_pin_set_dt(&led2, 1);
             gpio_pin_set(gpio_dev, 5, 0);
             // A fault has occured, let other nodes know
-            printf("Measurement was under limit.\n");
+            //printf("Measurement was under limit.\n");
             lf_set(startCountdown, 1);
             for (int i = 0; i < 4; i++) {
                 lf_set(measOut[i], voltageMeasurement);
@@ -255,20 +256,20 @@ federated reactor at 192.0.2.2:15047 {
     unitA.voltageReportOut -> unitA.voltageReportAIn, 
                               unitB.voltageReportAIn, 
                               unitC.voltageReportAIn, 
-                              unitD.voltageReportAIn after 100 msec;
+                              unitD.voltageReportAIn after 50 msec;
 
     unitB.voltageReportOut -> unitA.voltageReportBIn, 
                               unitB.voltageReportBIn, 
                               unitC.voltageReportBIn, 
-                              unitD.voltageReportBIn after 100 msec;
+                              unitD.voltageReportBIn after 50 msec;
 
     unitC.voltageReportOut -> unitA.voltageReportCIn, 
                               unitB.voltageReportCIn, 
                               unitC.voltageReportCIn, 
-                              unitD.voltageReportCIn after 100 msec;
+                              unitD.voltageReportCIn after 50 msec;
 
     unitD.voltageReportOut -> unitA.voltageReportDIn, 
                               unitB.voltageReportDIn, 
                               unitC.voltageReportDIn, 
-                              unitD.voltageReportDIn after 100 msec;
+                              unitD.voltageReportDIn after 50 msec;
 }

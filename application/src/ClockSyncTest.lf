@@ -9,7 +9,10 @@ target C {
     threading: true,
     workers: 2,
     no-compile: true,
-    //coordination: decentralized
+    coordination: decentralized,
+    //logging: info,
+    //clock-sync: on,
+    //clock-sync-options: {local-federates-on: true, period: 5 sec},
 }
 
 preamble {=
@@ -27,8 +30,8 @@ reactor Source(period: time(1 sec)) {
 }
 
 federated reactor ClockSyncTest at 192.0.2.2:15047{
-    s = new Source();
-    d = new Source();
+    s = new Source(period = 100 msec);
+    d = new Source(period = 100 msec);
 
     reaction(startup) {=
         assert(device_is_ready(led.port));

@@ -1,18 +1,23 @@
 target C {
     platform: {
-       name: Zephyr,
-       board: mimxrt1170_evk_cm7,
-       port: /dev/enp4s0f2
-    },
+        name: linux,
+        board: mimxrt1170_evk_cm7,
+        port: /dev/enp4s0f2,
+     },
     threading: true,
     workers: 2,
-    no-compile: true,
-    //coordination: decentralized
 }
 
 main reactor {
+    timer t(1 sec,1 sec);
     reaction(startup) {=
-        printf("Hello World\n");
+
+        printf("Hello ");
+        lf_sleep(MSEC(1000));
+        printf("World\n");
+    =}
+    reaction(t) {=
+        printf("Time\n");
     =}
 }
 

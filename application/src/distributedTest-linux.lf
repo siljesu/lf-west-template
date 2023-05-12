@@ -1,37 +1,21 @@
 target C {
-    platform: {
-        name: Zephyr,
-        board: mimxrt1170_evk_cm7,
-        port: /dev/enp4s0f2
-     },
      threading: true,
      workers: 2,
-     no-compile: true,
      //timeout: 15 sec,
-     coordination: decentralized,
+     //coordination: decentralized,
      //clock-sync: on,
 }
 
 reactor Source(period: time(2 sec), iterations:int(10)) {
-    preamble{=
-        #include <zephyr/kernel.h>
-        #include <zephyr/drivers/gpio.h>
-
-        static const struct gpio_dt_spec led1 = GPIO_DT_SPEC_GET(DT_ALIAS(led0), gpios);
-    =}
     output y: int
     timer t(1 sec, period)
     state count: int(0)
 
     reaction(startup) {=
-        assert(device_is_ready(led1.port));
-        gpio_pin_configure_dt(&led1, GPIO_OUTPUT_ACTIVE);
-        gpio_pin_set_dt(&led1, 1);
     =}
 
     reaction(t) -> y {=
         (self->count)++;
-        gpio_pin_toggle_dt(&led1);
         lf_set(y, self->count);
         if (self->count == self->iterations) {
             lf_request_stop();
@@ -44,19 +28,10 @@ reactor Source(period: time(2 sec), iterations:int(10)) {
 }
 
 reactor Drain {
-    preamble{=
-        #include <zephyr/kernel.h>
-        #include <zephyr/drivers/gpio.h>
-
-        static const struct gpio_dt_spec led1 = GPIO_DT_SPEC_GET(DT_ALIAS(led0), gpios);
-    =}
     input x: int
     state count: int(0)
 
     reaction(startup) {=
-        assert(device_is_ready(led1.port));
-        gpio_pin_configure_dt(&led1, GPIO_OUTPUT_ACTIVE);
-        gpio_pin_set_dt(&led1, 1);
         printf("Starting first iteration at %u.\n", self->count, lf_time_physical_elapsed());
     =}
 
@@ -66,7 +41,6 @@ reactor Drain {
             printf("Received wrong message: %u. Expected: %u. Requesting stop.\n", x->value, self->count);
             lf_request_stop();
         } else {
-            gpio_pin_toggle_dt(&led1);
         }
     =}
 
@@ -80,8 +54,8 @@ reactor Print {
     =}
 }
 
-federated reactor distributedTest at 192.0.2.2:15047 {
-    s = new Source(period = 100 msec, iterations = 1000);
+federated reactor at 192.0.2.2:15047 {
+    s = new Source(period = 100 msec, iterations = 300); // 3 msec for lite. Buffere fylles opp raskere enn de tømmes?
     d = new Drain();
     p = new Print();
     s.y -> d.x;

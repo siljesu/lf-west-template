@@ -1,12 +1,8 @@
 target C {
-    platform: {
-       name: Zephyr,
-       board: mimxrt1170_evk_cm7,
-       port: /dev/enp4s0f2
-    },
+    platform: linux,
     threading: true,
     workers: 2,
-    no-compile: true,
+    //no-compile: true,
     //coordination: decentralized
 }
 
@@ -16,7 +12,7 @@ reactor Fed {
     output out: int
 }
 
-federated reactor at 192.0.2.1:15047 {
+federated reactor at 0.0.0.0:15047 {
     s = new Fed();
     d = new Fed();
 
