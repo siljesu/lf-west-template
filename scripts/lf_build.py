@@ -100,7 +100,7 @@ class LfFedBuild(WestCommand):
     def __init__(self):
         super().__init__(
             'lf-fed-build',               # gets stored as self.name
-            'Compile LF program and then run west build, tweaked for federated',  # self.help
+            'Compile federated LF program and then run west build',  # self.help
             ""
         )
         # To use a specific lfc binary the following variable can be modified
@@ -122,7 +122,7 @@ class LfFedBuild(WestCommand):
         parser.add_argument('-w', '--west-commands', help='Arguments to forward to west')
         parser.add_argument('-c', '--conf-overlays', help='Additional configuration overlays')
         parser.add_argument('-n', '--no-lfc', action='store_true', help='Do not generate new code using lfc')
-        parser.add_argument('-f', '--federate', nargs='+', help='Build only specified federate')
+        parser.add_argument('-f', '--federate', nargs='+', help='Build only specified federates. Example useage: -f fed1 fed2')
         parser.add_argument('--lfc', help='Path to LFC binary')
 
         return parser           # gets stored as self.parser
@@ -138,15 +138,13 @@ class LfFedBuild(WestCommand):
         if appPath == "":
             appPath = "."
 
-        # 1. Invoke lfc with clean flag `-c` and without invoking target
-        #    compiler `n`.
         if args.lfc:
             self.lfcPath = args.lfc
             
         if args.no_lfc:
             print("Not executing lfc command for this build.")
         else:
-            lfcCmd = f"{self.lfcPath} -c -n {args.main_lf}"
+            lfcCmd = f"{self.lfcPath} -n {args.main_lf}"
             print(f"Executing lfc command: `{lfcCmd}`")
             res = subprocess.Popen(lfcCmd, shell=True)
             ret = res.wait()
@@ -163,48 +161,55 @@ class LfFedBuild(WestCommand):
             print("Error: Use `--conf-overlays` option to pass config overlays to west")
 
         federateNames = [name for name in os.listdir("./"+srcGenPath)]
+        
+        # Extract board name from west command
+        westCmds = args.west_commands.split(" ")
+        if "-b" in westCmds:
+            boardName = westCmds[westCmds.index("-b") + 1]
+        elif "--board" in westCmds:
+            boardName = westCmds[westCmds.index("--board") + 1]
+        else:
+            print("Error: board must be specified for lf-fed-build command.")
 
+        # Copy project configuration files into correct folders
         for fedName in federateNames:
+            # Skip federate if federates to compile have been specified, and this federate is not included
             if args.federate and fedName not in args.federate:
                 continue
-            # Copy project configurations into src-gen 
+
             userConfigPaths=f"prj_{fedName}.conf"
             res = subprocess.Popen(f"cp {appPath}/prj_{fedName}.conf {srcGenPath}/{fedName}/", shell=True)
             ret = res.wait()
             if ret != 0:
-                print(f"Warning: Could not find federate config file {userConfigPaths}, using default config file only.")
+                print(f"Warning: Could not find federate config file {userConfigPaths}, using default config file only. \
+                      If there are multiple board federates, then the IP addresses might not be configured correctly.")
                 userConfigPaths=""
-                
-            res = subprocess.Popen(f"cp {appPath}/mimxrt1170_evk_cm7_{fedName}.overlay {srcGenPath}/{fedName}/boards/mimxrt1170_evk_cm7.overlay", shell=True)
+
+            res = subprocess.Popen(f"cp {appPath}/{boardName}_{fedName}.overlay {srcGenPath}/{fedName}/boards/{boardName}.overlay", shell=True)
             ret = res.wait()
             if ret != 0:
-                print(f"Warning: Could not find federate dts overlay file.")
+                print(f"Warning: Could not find federate dts overlay file. If there are multiple board federates, \
+                      then the board MAC addresses might become equal.")
                 
             if args.conf_overlays:
                 res = subprocess.Popen(f"cp {appPath}/{args.conf_overlays} {srcGenPath}/{fedName}/", shell=True)
-                userConfigPaths += f";{args.conf_overlays}"
+                userConfigPaths += f" {args.conf_overlays}"
 
-            # Copy the Kconfig file into the src-gen directory
             res = subprocess.Popen(f"cp {appPath}/Kconfig {srcGenPath}/{fedName}/", shell=True)
             ret = res.wait()
             if ret != 0:
                 exit(1)
 
-            # Parse the generated CompileDefinitions.txt which should be 
-            # forwarded to west
             compileDefs = ""
             with open(f"{srcGenPath}/{fedName}/CompileDefinitions.txt") as f:
                 for line in f:
                     line = line.replace("\n", "")
                     compileDefs += f"-D{line} "
                         
-        for fedName in federateNames:
-            if args.federate and fedName not in args.federate:
-                continue
-            # Let file copying finish before attempting to build one federate            
             print(compileDefs)
+
             # Invoke west in the `src-gen` directory. Pass in 
-            westCmd = f"west build {srcGenPath}/{fedName} --build-dir ./zephyr-{fedName}-build {args.west_commands} -- -DCMAKE_BUILD_TYPE=Test -DOVERLAY_CONFIG=\"prj_{fedName}.conf\" {compileDefs}"
+            westCmd = f"west build {srcGenPath}/{fedName} --build-dir ./zephyr-{fedName}-build {args.west_commands} -- -DCMAKE_BUILD_TYPE=Test -DOVERLAY_CONFIG=\"{userConfigPaths}\" {compileDefs}"
             print(f"Executing west command: `{westCmd}`")
             res = subprocess.Popen(westCmd, shell=True)
             ret = res.wait()
@@ -215,7 +220,7 @@ class LfFedFlash(WestCommand):
     def __init__(self):
         super().__init__(
             'lf-fed-flash',               # gets stored as self.name
-            'Flash LF program binaries for different federation topology modes',  # self.help
+            'Flash multiple LF program binaries to boards',  # self.help
             ""
         )
 
@@ -228,10 +233,7 @@ class LfFedFlash(WestCommand):
                                          description=self.description)
 
         # Add some example options using the standard argparse module API.
-        # parser.add_argument('-o', '--optional', help='an optional argument')
-        # parser.add_argument('project_root', help='Path to root of project')
-        parser.add_argument('-m', '--mode', help='Federate topology mode. \n1: One federate on one board. The other federates and the RTI are launched on linux. \n2: One federate for each connected board. RTI is launched on linux. \n3: One federate and the RTI is launched on one board. The rest of the federates are launched on linux. \n4: One federate for each connected board. RTI will be launched aloongside one of them.')
-        parser.add_argument('-n', '--num-boards', help='Number of connected boards.')
+        parser.add_argument('-n', '--num-federates', type=int, help='Number of federates to flash. This should match the number of connected boards.')
 
         return parser           # gets stored as self.parser
 
@@ -259,74 +261,28 @@ class LfFedFlash(WestCommand):
         if len(boardEntries) == 0:
             print("\nError: No boards found. Check your connection or the board's debug setup. Exiting.\n")
             exit(1)
+
         # Print human readable board info
         print(f"\nFound {len(boardEntries)} board(s): ")
         for boardEntry in boardEntries:
             print(f"{boardEntry[6]} with unique ID {boardEntry[4]}")
-        
-        if args.mode == "1":
-            if len(matching_dirs) != 1:
-                print(f"\nWarning: Mode {args.mode} chosen with {len(matching_dirs)} federate build directories. Using only one.")
-            if len(boardEntries) != 1:
-                print(f"\nWarning: Mode {args.mode} chosen with {len(boardEntries)} connected boards. Using only one.")
 
-            westCmd = f"west flash -r pyocd --build-dir {matching_dirs[0]} -i {boardEntries[0][4]}"
-            print(f"\nExecuting west command: `{westCmd}`")
-
-            res = subprocess.Popen(westCmd, shell=True)
-            ret = res.wait()
-            if ret != 0:
-                exit(1)
-
-            lfcCmd = f"lfc src/CompositionThreaded_linux.lf"
-            res = subprocess.Popen(lfcCmd, shell=True)
-            ret = res.wait()
-            if ret != 0:
-                exit(1)
-
-            runCmd = f"fed-gen/CompositionThreaded_linux/bin/s -i \"Unidentified Federation\""
-            res = subprocess.Popen(runCmd, shell=True)
-
-            rtiCmd = f"RTI -n 2 -p 15047 -i \"Unidentified Federation\""
-            res = subprocess.Popen(rtiCmd, shell=True)
-            ret = res.wait()
-            if ret != 0:
-                exit(1)
-
-
-        elif args.mode == "2":
-            if len(matching_dirs) < 2:
-                print(f"\nError: Mode {args.mode} chosen with only {len(matching_dirs)} federate build directories. Not enough. Exiting.")
-                exit(1)
-            if len(boardEntries) < 2:
-                print(f"\nError: Mode {args.mode} chosen with only {len(boardEntries)} connected boards. Not enough. Exiting.")
-                exit(1)
-            if len(matching_dirs) > len(boardEntries):
-                print(f"\nError: Mode {args.mode} chosen with {len(matching_dirs)} federate build directories, but only {len(boardEntries)} connected boards. Not enough. Exiting.")
-                exit(1)
-            elif len(matching_dirs) < len(boardEntries):
-                print(f"\nWarning: Mode {args.mode} chosen with {len(matching_dirs)} federate build directories, but with {len(boardEntries)} connected boards. Using only {len(matching_dirs)} boards.")
-
-            for fedBuildNum in range(0, len(matching_dirs)):
-                westCmd = f"west flash -r pyocd --build-dir {matching_dirs[fedBuildNum]} -i {boardEntries[fedBuildNum][4]}"
-                print(f"\nExecuting west command [{fedBuildNum+1}/{len(matching_dirs)}]: `{westCmd}`")
-
-                res = subprocess.run(westCmd, shell=True)
-                if res.returncode != 0:
-                    print(f"\nError: flash failed")
-                    exit(1)
-                            
-            #rtiCmd = f"RTI -n 2 -p 15047 -i \"Unidentified Federation\""
-            #res = subprocess.Popen(rtiCmd, shell=True)
-            #ret = res.wait()
-            #if ret != 0:
-            #    exit(1)
-                
-        # elif args.mode == "3":
-        # elif args.mode == "4":
-        
-        else:
-            print(f"\nError: {args.mode} is not a valid option. Try modes 1, 2, 3 or 4. Exiting.")
+        # Information about number of federates versus number of connected boards
+        if len(matching_dirs) != args.num_federates:
+            print(f"\nError: Attempting to flash {args.num_federates} federates, with {len(matching_dirs)} federate build directories. Expected exactly {args.num_federates}. Exiting.")
             exit(1)
+        if len(boardEntries) < args.num_federates:
+            print(f"\nError: Attempting to flash {args.num_federates} federates, with only {len(boardEntries)} connected boards. Not enough. Exiting.")
+            exit(1)
+        if len(boardEntries) > args.num_federates:
+            print(f"\nWarning: Attempting to flash {args.num_federates} federates, with too many ({len(boardEntries)}) connected boards. Extra board(s) will be unused.")
 
+        # Start flashing
+        for fedBuildNum in range(0, len(matching_dirs)):
+            westCmd = f"west flash -r pyocd --build-dir {matching_dirs[fedBuildNum]} -i {boardEntries[fedBuildNum][4]}"
+            print(f"\nExecuting west command [{fedBuildNum+1}/{len(matching_dirs)}]: `{westCmd}`")
 
+            res = subprocess.run(westCmd, shell=True)
+            if res.returncode != 0:
+                print(f"\nError: flash failed")
+                exit(1)
