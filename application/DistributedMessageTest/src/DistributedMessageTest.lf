@@ -1,15 +1,11 @@
 target C {
     platform: {
-        name: Zephyr,
-        board: mimxrt1170_evk_cm7,
-        port: /dev/enp4s0f2
+        name: Zephyr
      },
      threading: true,
      workers: 2,
      no-compile: true,
-     //timeout: 15 sec,
      coordination: decentralized,
-     //clock-sync: on,
 }
 
 reactor Source(period: time(2 sec), iterations:int(10)) {
@@ -80,8 +76,8 @@ reactor Print {
     =}
 }
 
-federated reactor distributedTest at 192.0.2.2:15047 {
-    s = new Source(period = 100 msec, iterations = 1000);
+federated reactor DistributedMessageTest at 192.0.2.2:15047 {
+    s = new Source(period = 100 usec, iterations = 3000);
     d = new Drain();
     p = new Print();
     s.y -> d.x;
