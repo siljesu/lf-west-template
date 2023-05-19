@@ -1,9 +1,5 @@
 target C {
-    platform: {
-        name: Zephyr,
-        board: mimxrt1170_evk_cm7,
-        port: /dev/enp4s0f2
-     },
+    platform: "Zephyr",
     no-compile: true,
     coordination: decentralized,
     workers: 2,

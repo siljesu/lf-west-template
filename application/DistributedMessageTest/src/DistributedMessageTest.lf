@@ -1,7 +1,5 @@
 target C {
-    platform: {
-        name: Zephyr
-     },
+     platform: "Zephyr",
      threading: true,
      workers: 2,
      no-compile: true,
