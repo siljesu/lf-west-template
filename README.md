@@ -65,15 +65,13 @@ invokes `lfc` on the provided LF source file. It then invokes `west build` on
 the generated sources. See `west lf-build -h` for more information.
 
 
-### Federated Execution
+## Federated Execution
 Experimental federated execution is available for the Zephyr platform, tested with the board mimxrt1170_evk_cm7.
 
-#### Prerequisites
-
-#### Network Setup
+### Network Setup
 To connect the sockets of an external federate (running on MCUs) and the RTI (running on the linux machine) both Zephyr configuration and network interface configuration with linux is necessary. The ethernet interface connecting the physical units must be initialized with an IP addresses on both ends.
 
-##### Linux-side Setup
+#### Linux-side Setup
 Check all network interface addresses on the linux machine by running 
 
 ```
@@ -112,7 +110,7 @@ $ ip route
 
 Take special note that these changes are not necessarily persistent, and will be lost with a restart, unless the commands are added to the user's script file or the linux distributions configuration files.
 
-##### Board-side Setup
+#### Board-side Setup
 On the federate application side, networking and the POSIX API must be enabled and configured with Zephyr configuration options in the file `prj_<FED_NAME>.conf`. The following is a base configuration file to work from, and is provided in the federated program examples. In this example, the federate is assigned the IP address 192.0.2.1.
 
 ```
@@ -178,7 +176,7 @@ Furthermore, the MAC addresses of the boards can be configured using DTS overlay
 
 Other application-specific hardware configurations can be added in this file.
 
-#### Build
+### Build
 To build a federated LF application, run
 
 ```
@@ -204,7 +202,7 @@ To build without running the `lfc` command can be useful if modifying the auto-g
 
 The lf-fed-build can be inspected in `scripts/lf_build.py`. By default, it invokes `lfc` on the provided LF source file. It then copies over necessary Zephyr configuration files to each generated federate. Then `west build` is invoked on each federate, resulting in a build folder per federate.
 
-#### Flash
+### Flash
 
 To flash n federates to at least n connected boards, a custom west command called `lf-fed-flash` is supplied. The only command-line option is `-n` which accepts an integer representing the number of federates to flash. It must match the number of build folders in the current directory (where the command is called from). 
 
@@ -215,7 +213,7 @@ $ west lf-fed-flash -n 3
 ```
 To use this command, it is necessary that debugging is set up properly, and specifically using the `pyocd` runner. 
 
-#### Debugger Setup
+### Debugger Setup
 Test debugging with `pyocd` by building and flashing a basic Zephyr sample
 ```
 $ cd deps/zephyr/samples/hello_world
@@ -247,7 +245,7 @@ If PyOCD is setup, then debugging with GDB can be done by simply running
 $ west debug -r pyocd
 ```
 
-#### Run
+### Run
 
 To run a federation, start the RTI with ID "Unidentified Federation" and supplying the number of federates to connect. This can be federates running from boards or also from a linux computer. For example, run
 
