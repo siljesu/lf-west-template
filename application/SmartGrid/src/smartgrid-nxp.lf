@@ -5,8 +5,7 @@ target C {
     workers: 2,
 }
 
-
-reactor DistAlg(ownId:int(0)) {
+reactor DistAlg(ownId:int(0), STP_offset:time(10 msec)) {
     preamble {=
         void findIndexSmallestValues(int* arr, int* closestArr, int n) {
             int min1 = arr[0];
@@ -37,10 +36,8 @@ reactor DistAlg(ownId:int(0)) {
 
         int localAction(int closestRelays[], int ownId) {
             if (ownId == closestRelays[0] || ownId == closestRelays[1]) {
-                //printf("This relay should open, disconnecting the grid.\n");
                 return 1;
             } else {
-                //printf("This relay should close, connecting the grid.\n");
                 return 0;
             }
         }
@@ -60,45 +57,73 @@ reactor DistAlg(ownId:int(0)) {
 
     reaction(voltageReportAIn, voltageReportBIn, voltageReportCIn, voltageReportDIn) -> distributedDecision {=
         bool result = 1; // default open
-        //printf("Entering algorithm.\n");
-        
+
+
         //debugging
-        // if (voltageReportAIn->is_present) {
-        //     printf("Input from A was present.\n");
-        // } else {
-        //     printf("Input from A was not present.\n");
-        // }
+        if (voltageReportAIn->is_present) {
+            printf("Input from A was present.\n");
+        } else {
+            printf("Input from A was not present.\n");
+        }
 
-        // if (voltageReportBIn->is_present) {
-        //     printf("Input from B was present.\n");
-        // } else {
-        //     printf("Input from B was not present.\n");
-        // }
+        if (voltageReportBIn->is_present) {
+            printf("Input from B was present.\n");
+        } else {
+            printf("Input from B was not present.\n");
+        }
 
-        // if (voltageReportCIn->is_present) {
-        //     printf("Input from C was present.\n");
-        // } else {
-        //     printf("Input from C was not present.\n");
-        // }
+        if (voltageReportCIn->is_present) {
+            printf("Input from C was present.\n");
+        } else {
+            printf("Input from C was not present.\n");
+        }
 
-        // if (voltageReportDIn->is_present) {
-        //     printf("Input from D was present.\n");
-        // } else {
-        //     printf("Input from D was not present.\n");
-        // }
+        if (voltageReportDIn->is_present) {
+            printf("Input from D was present.\n");
+        } else {
+            printf("Input from D was not present.\n");
+        }
 
         if (voltageReportAIn->is_present && voltageReportBIn->is_present && voltageReportCIn->is_present && voltageReportDIn->is_present) {
             int voltageReports[4] = {voltageReportAIn->value, voltageReportBIn->value, voltageReportCIn->value, voltageReportDIn->value};
             result = decideLocalAction(voltageReports, self->ownId, 4);
-            //printf("Setting relay %u to %u (1=open,0=close)\n", self->ownId, result);
             lf_set(distributedDecision, result);
         }
     =} STP(0) {=
         printf("STP violation: Did not receive inputs in time, opening circuit as default.\n");
+        
+        //debugging
+        if (((lf_time_logical_elapsed() - (voltageReportAIn->intended_tag.time - lf_time_start()) > 0) || 
+           ((lf_time_logical_elapsed() - (voltageReportAIn->intended_tag.time - lf_time_start()) == 0) && 
+           ((lf_tag().microstep - voltageReportAIn->intended_tag.microstep) > 0))) &&
+           (voltageReportAIn->is_present)) {
+            printf("Input from A was tardy.\n");
+        }
+
+        if (((lf_time_logical_elapsed() - (voltageReportBIn->intended_tag.time - lf_time_start()) > 0) || 
+           ((lf_time_logical_elapsed() - (voltageReportBIn->intended_tag.time - lf_time_start()) == 0) && 
+           ((lf_tag().microstep - voltageReportBIn->intended_tag.microstep) > 0))) &&
+           (voltageReportBIn->is_present)) {
+            printf("Input from B was tardy.\n");
+        }
+
+        if (((lf_time_logical_elapsed() - (voltageReportCIn->intended_tag.time - lf_time_start()) > 0) || 
+           ((lf_time_logical_elapsed() - (voltageReportCIn->intended_tag.time - lf_time_start()) == 0) && 
+           ((lf_tag().microstep - voltageReportCIn->intended_tag.microstep) > 0))) &&
+           (voltageReportCIn->is_present)) {
+            printf("Input from C was tardy.\n");
+        }
+
+        if (((lf_time_logical_elapsed() - (voltageReportDIn->intended_tag.time - lf_time_start()) > 0) || 
+           ((lf_time_logical_elapsed() - (voltageReportDIn->intended_tag.time - lf_time_start()) == 0) && 
+           ((lf_tag().microstep - voltageReportDIn->intended_tag.microstep) > 0))) &&
+           (voltageReportDIn->is_present)) {
+            printf("Input from D was tardy.\n");
+        }
     =}
 }
 
-reactor CircuitStatus {
+reactor CircuitStatus(STP_offset:time(0 msec)) {
     preamble {=
         #include <zephyr/kernel.h>
         #include <zephyr/drivers/gpio.h>
@@ -127,31 +152,32 @@ reactor CircuitStatus {
     =}
 
     reaction(countdown) -> breakCircuit {=
-        //printf("Starting countdown to automatic open relay (breaking circuit). 5 sec.\n");
         self->faultHandled = 0;
         lf_schedule(breakCircuit, MSEC(150));
+    =} STP(0) {=
+        printf("STP violation for countdown\n");
     =}
 
     reaction(breakCircuit) {=
         if (self->faultHandled){
             // This relay is not the closest to the fault
-            //printf("Fault handled elsewhere, so not breaking circuit\n");
         } else {
-            //printf("Opening relay (breaking circuit).\n");
             openCircuit();
         }
+    =} STP(0) {=
+        printf("STP violation for breakcircuit.\n");
     =}
 
     reaction(distributedDecision) -> breakCircuit {=
         if (distributedDecision->value) {
-            //printf("Algorithm decided to open this relay, breaking the circuit.\n");
             openCircuit();
             self->faultHandled = 1;
         } else {
-            //printf("Algorithm decided to close this relay. Fault has been handled by another relay.\n");
             closeCircuit();
             self->faultHandled = 1;
         }
+    =} STP(0) {=
+        printf("STP violation for distributed decision.\n");
     =}
 }
 
@@ -173,12 +199,11 @@ reactor VoltageSensor(id:int(0)) {
                             {15000,15000,12500,15000,15000,15000,15000,15000,15000,15000,15000,15000,15000,15000,15000}};
 
         int readSensor(int id, int count) {
-            //printf("Read %u\n", simMeas[id][count]);
             return simMeas[id][count];
         }
     =}
 
-    timer t(1 sec, 100 msec);
+    timer t(1 sec, 50 msec);
     output[4] measOut:int
     output startCountdown:int
     state measCount:int(0)
@@ -208,18 +233,15 @@ reactor VoltageSensor(id:int(0)) {
             gpio_pin_set_dt(&led2, 1);
             gpio_pin_set(gpio_dev, 5, 0);
             // A fault has occured, let other nodes know
-            //printf("Measurement was under limit.\n");
             lf_set(startCountdown, 1);
             for (int i = 0; i < 4; i++) {
                 lf_set(measOut[i], voltageMeasurement);
-                //etter reaksjon settes dette ^
-                // ny reaktor som kalles network som simulerer forsinkelse
             }
         }
     =}
 }
 
-reactor RelayUnit(id:int(0)) {
+reactor RelayUnit(id:int(0), STP_offset:time(0 msec)) {
     output[4] voltageReportOut:int;
     input voltageReportAIn:int;
     input voltageReportBIn:int;
@@ -252,20 +274,20 @@ federated reactor at 192.0.2.2:15047 {
     unitA.voltageReportOut -> unitA.voltageReportAIn, 
                               unitB.voltageReportAIn, 
                               unitC.voltageReportAIn, 
-                              unitD.voltageReportAIn after 50 msec;
+                              unitD.voltageReportAIn after 15 msec;
 
     unitB.voltageReportOut -> unitA.voltageReportBIn, 
                               unitB.voltageReportBIn, 
                               unitC.voltageReportBIn, 
-                              unitD.voltageReportBIn after 50 msec;
+                              unitD.voltageReportBIn after 15 msec;
 
     unitC.voltageReportOut -> unitA.voltageReportCIn, 
                               unitB.voltageReportCIn, 
                               unitC.voltageReportCIn, 
-                              unitD.voltageReportCIn after 50 msec;
+                              unitD.voltageReportCIn after 15 msec;
 
     unitD.voltageReportOut -> unitA.voltageReportDIn, 
                               unitB.voltageReportDIn, 
                               unitC.voltageReportDIn, 
-                              unitD.voltageReportDIn after 50 msec;
+                              unitD.voltageReportDIn after 15 msec;
 }
