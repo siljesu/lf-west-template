@@ -1,7 +1,7 @@
 target C {
      threading: true,
      workers: 2,
-     coordination: decentralized,
+     //coordination: decentralized,
 }
 
 reactor Source(period: time(2 sec), iterations:int(10)) {
@@ -52,7 +52,7 @@ reactor Print {
     =}
 }
 
-federated reactor at 192.0.2.2 {
+federated reactor at localhost:8080 {
     s = new Source(period = 100 usec, iterations = 3000); // 3 msec for lite. Buffere fylles opp raskere enn de tømmes?
     d = new Drain();
     p = new Print();

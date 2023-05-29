@@ -2,7 +2,7 @@ target C {
     coordination: decentralized,
 }
 
-reactor DistAlg(ownId:int(0), STP_offset:time(10 msec)) {
+reactor DistAlg(ownId:int(0), STP_offset:time(0 msec)) {
     preamble {=
         void findIndexSmallestValues(int* arr, int* closestArr, int n) {
             int min1 = arr[0];
@@ -53,110 +53,52 @@ reactor DistAlg(ownId:int(0), STP_offset:time(10 msec)) {
     input voltageReportDIn:int
     state voltages:int[] = {0, 0, 0, 0}
     state numReports:int(0)
-    state result:bool
-
-    reaction(voltageReportAIn) -> distributedDecision {=
-        //printf("Input from A is present.\n");
-        self->voltages[0] = voltageReportAIn->value;
-        self->numReports++;
-        instant_t STP_discrepency = lf_time_logical() + self->STP_offset - voltageReportAIn->physical_time_of_arrival;
-        //lf_print("STP discrepency: %lld", STP_discrepency);
-        //lf_print("STP offset: %lld", self->STP_offset);
-        //lf_print("curr logical time: %lld", lf_time_logical() - lf_time_start());
-        //lf_print("time of arrival: %lld", voltageReportAIn->physical_time_of_arrival - lf_time_start());
-        //lf_print("intended tag: (%lld, %d)", voltageReportAIn->intended_tag.time - lf_time_start(), voltageReportAIn->intended_tag.microstep);
-
-        if (STP_discrepency < 0) {
-            //lf_print("The message A has violated the STP offset in physical time.\n");
-        } else {
-            //lf_print("The message A arrived early.\n");
-        }
-        if (self->numReports == 4) {
-            //printf("Received all inputs. Deciding best action.");
+    state result:bool (false)
+    reaction(voltageReportAIn, voltageReportBIn, voltageReportCIn, voltageReportDIn) -> distributedDecision {=
+        if (voltageReportAIn->is_present && voltageReportBIn->is_present && voltageReportCIn->is_present && voltageReportDIn->is_present) {
+            self->voltages[0] = voltageReportAIn->value;
+            self->voltages[1] = voltageReportBIn->value;
+            self->voltages[2] = voltageReportCIn->value;
+            self->voltages[3] = voltageReportDIn->value;
             self->result = decideLocalAction(self->voltages, self->ownId, 4);
+            //printf("Setting relay %u to %u (1=open,0=close)\n", self->ownId, result);
             lf_set(distributedDecision, self->result);
         }
     =} STP(0) {=
-        //printf("STP violation: Did not receive input A in time, opening circuit as default.\n");
-    =}
+        printf("STP violation: Did not receive inputs in time, opening circuit as default.\n");
 
-    reaction(voltageReportBIn) -> distributedDecision {=
-        //printf("Input from B is present.\n");
-        self->voltages[1] = voltageReportBIn->value;
-        self->numReports++;
-        instant_t STP_discrepency = lf_time_logical() + self->STP_offset - voltageReportBIn->physical_time_of_arrival;
-        //lf_print("STP discrepency: %lld", STP_discrepency);
-        //lf_print("STP offset: %lld", self->STP_offset);
-        //lf_print("curr logical time: %lld", lf_time_logical() - lf_time_start());
-        //lf_print("time of arrival: %lld", voltageReportBIn->physical_time_of_arrival - lf_time_start());
-        //lf_print("intended tag: (%lld, %d)", voltageReportBIn->intended_tag.time - lf_time_start(), voltageReportBIn->intended_tag.microstep);
+        //debugging
+        if (((lf_time_logical_elapsed() - (voltageReportAIn->intended_tag.time - lf_time_start()) > 0) || 
+           ((lf_time_logical_elapsed() - (voltageReportAIn->intended_tag.time - lf_time_start()) == 0) && 
+           ((lf_tag().microstep - voltageReportAIn->intended_tag.microstep) > 0))) &&
+           (voltageReportAIn->is_present)) {
+            printf("Input from A was tardy.\n");
+        }
 
-        if (STP_discrepency < 0) {
-            //lf_print("The message B has violated the STP offset in physical time.\n");
-        } else {
-            //lf_print("The message B arrived early.\n");
+        if (((lf_time_logical_elapsed() - (voltageReportBIn->intended_tag.time - lf_time_start()) > 0) || 
+           ((lf_time_logical_elapsed() - (voltageReportBIn->intended_tag.time - lf_time_start()) == 0) && 
+           ((lf_tag().microstep - voltageReportBIn->intended_tag.microstep) > 0))) &&
+           (voltageReportBIn->is_present)) {
+            printf("Input from B was tardy.\n");
         }
-        if (self->numReports == 4) {
-            //printf("Received all inputs. Deciding best action.");
-            self->result = decideLocalAction(self->voltages, self->ownId, 4);
-            lf_set(distributedDecision, self->result);
-        }
-    =} STP(0) {=
-        //printf("STP violation: Did not receive input B in time, opening circuit as default.\n");
-    =}
 
-    reaction(voltageReportCIn) -> distributedDecision {=
-        //printf("Input from C is present.\n");
-        self->voltages[2] = voltageReportCIn->value;
-        self->numReports++;
-        instant_t STP_discrepency = lf_time_logical() + self->STP_offset - voltageReportCIn->physical_time_of_arrival;
-        //lf_print("STP discrepency: %lld", STP_discrepency);
-        //lf_print("STP offset: %lld", self->STP_offset);
-        //lf_print("curr logical time: %lld", lf_time_logical() - lf_time_start());
-        //lf_print("time of arrival: %lld", voltageReportCIn->physical_time_of_arrival - lf_time_start());
-        //lf_print("Global stp offset is: %lld\n",lf_get_stp_offset());
-        //lf_print("intended tag: (%lld, %d)", voltageReportCIn->intended_tag.time - lf_time_start(), voltageReportCIn->intended_tag.microstep);
+        if (((lf_time_logical_elapsed() - (voltageReportCIn->intended_tag.time - lf_time_start()) > 0) || 
+           ((lf_time_logical_elapsed() - (voltageReportCIn->intended_tag.time - lf_time_start()) == 0) && 
+           ((lf_tag().microstep - voltageReportCIn->intended_tag.microstep) > 0))) &&
+           (voltageReportCIn->is_present)) {
+            printf("Input from C was tardy.\n");
+        }
 
-        if (STP_discrepency < 0) {
-            //lf_print("The message C has violated the STP offset in physical time.\n");
-        } else {
-            //lf_print("The message C arrived early.\n");
+        if (((lf_time_logical_elapsed() - (voltageReportDIn->intended_tag.time - lf_time_start()) > 0) || 
+           ((lf_time_logical_elapsed() - (voltageReportDIn->intended_tag.time - lf_time_start()) == 0) && 
+           ((lf_tag().microstep - voltageReportDIn->intended_tag.microstep) > 0))) &&
+           (voltageReportDIn->is_present)) {
+            printf("Input from D was tardy.\n");
         }
-        if (self->numReports == 4) {
-            //printf("Received all inputs. Deciding best action.");
-            self->result = decideLocalAction(self->voltages, self->ownId, 4);
-            lf_set(distributedDecision, self->result);
-        }
-    =} STP(0) {=
-        //printf("STP violation: Did not receive input C in time, opening circuit as default.\n");
-    =}
-
-    reaction(voltageReportDIn) -> distributedDecision {=
-        //printf("Input from D is present.\n");
-        self->voltages[3] = voltageReportDIn->value;
-        self->numReports++;
-        instant_t STP_discrepency = lf_time_logical() + self->STP_offset - voltageReportDIn->physical_time_of_arrival;
-        //lf_print("STP discrepency: %lld", STP_discrepency);
-        //lf_print("STP offset: %lld", self->STP_offset);
-        //lf_print("curr logical time: %lld", lf_time_logical() - lf_time_start());
-        //lf_print("time of arrival: %lld", voltageReportDIn->physical_time_of_arrival - lf_time_start());
-        //lf_print("intended tag: (%lld, %d)", voltageReportDIn->intended_tag.time - lf_time_start(), voltageReportDIn->intended_tag.microstep);
-        if (STP_discrepency < 0) {
-            //lf_print("The message D has violated the STP offset in physical time.\n");
-        } else {
-            //lf_print("The message D arrived early.\n");
-        }
-        if (self->numReports == 4) {
-            //printf("Received all inputs. Deciding best action.");
-            self->result = decideLocalAction(self->voltages, self->ownId, 4);
-            lf_set(distributedDecision, self->result);
-        }
-    =} STP(0) {=
-        //printf("STP violation: Did not receive input D in time, opening circuit as default.\n");
     =}
 }
 
-reactor CircuitStatus(STP_offset:time(20 msec)) {
+reactor CircuitStatus(STP_offset:time(0 msec)) {
     preamble {=
         void openCircuit() {
             // led turns on
@@ -225,7 +167,7 @@ reactor VoltageSensor(id:int(0)) {
         }
     =}
 
-    timer t(1 sec, 50 msec);
+    timer t(1 sec, 70 msec);
     output[4] measOut:int
     output startCountdown:int
     state measCount:int(0)
@@ -256,7 +198,7 @@ reactor VoltageSensor(id:int(0)) {
     =}
 }
 
-reactor RelayUnit(id:int(0)) {
+reactor RelayUnit(id:int(0), STP_offset:time(0 msec)) {
     output[4] voltageReportOut:int;
     input voltageReportAIn:int;
     input voltageReportBIn:int;
@@ -274,7 +216,6 @@ reactor RelayUnit(id:int(0)) {
     voltageReportBIn -> distAlg.voltageReportBIn;
     voltageReportCIn -> distAlg.voltageReportCIn;
     voltageReportDIn -> distAlg.voltageReportDIn;
-
     
     distAlg.distributedDecision -> circuitStatus.distributedDecision;
 
@@ -289,22 +230,22 @@ federated reactor at 192.0.2.2:15047 {
     unitA.voltageReportOut -> unitA.voltageReportAIn, 
                               unitB.voltageReportAIn, 
                               unitC.voltageReportAIn, 
-                              unitD.voltageReportAIn after 17500 usec;
+                              unitD.voltageReportAIn after 15 usec;
 
     unitB.voltageReportOut -> unitA.voltageReportBIn, 
                               unitB.voltageReportBIn, 
                               unitC.voltageReportBIn, 
-                              unitD.voltageReportBIn after 17500 usec;
+                              unitD.voltageReportBIn after 15 usec;
 
     unitC.voltageReportOut -> unitA.voltageReportCIn, 
                               unitB.voltageReportCIn, 
                               unitC.voltageReportCIn, 
-                              unitD.voltageReportCIn after 17500 usec;
+                              unitD.voltageReportCIn after 15 usec;
 
     unitD.voltageReportOut -> unitA.voltageReportDIn, 
                               unitB.voltageReportDIn, 
                               unitC.voltageReportDIn, 
-                              unitD.voltageReportDIn after 17500 usec;
+                              unitD.voltageReportDIn after 15 usec;
 
     // reaction(startup){=
     //     interval_t stp = 00000000LL;

@@ -15,6 +15,6 @@
 };
 
 &enet {
-	local-mac-address = [00 0a 35 00 00 01];
+	local-mac-address = [00 0a 35 00 00 02];
 	status = "okay";
 };

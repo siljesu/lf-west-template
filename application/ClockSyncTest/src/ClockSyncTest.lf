@@ -17,17 +17,26 @@ preamble {=
 
 reactor Source(period: time(1 sec)) {
     timer t(1 sec, period)
+    state count:int(0)
     reaction(t) {=
         gpio_pin_toggle_dt(&led);
+        self->count++;
+        if (self->count == 120) {
+            lf_request_stop();
+        }
+    =}
+    reaction(shutdown) {=
+        printf("Final count was: %d", self->count);
     =}
 }
 
 federated reactor ClockSyncTest at 192.0.2.2:15047{
-    s = new Source(period = 1 sec);
-    d = new Source(period = 1 sec);
+    s = new Source(period = 500 msec);
+    d = new Source(period = 500 msec);
 
     reaction(startup) {=
         assert(device_is_ready(led.port));
         gpio_pin_configure_dt(&led, GPIO_OUTPUT_ACTIVE);
+        gpio_pin_set_dt(&led, 1);
     =}
 }
