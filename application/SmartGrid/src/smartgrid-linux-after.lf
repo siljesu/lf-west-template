@@ -1,0 +1,250 @@
+target C {
+    coordination: decentralized,
+}
+
+reactor DistAlg(ownId:int(0)) {
+    preamble {=
+        void findIndexSmallestValues(int* arr, int* closestArr, int n) {
+            int min1 = arr[0];
+            int pos1 = 0;
+            int min2 = arr[1];
+            int pos2 = 1;
+
+            if (min2 < min1) {
+                min1 = arr[1];
+                pos1 = 1;
+                min2 = arr[0];
+                pos2 = 0;
+            }
+            for (int i = 2; i < n; i++) {
+                if (arr[i] < min1) {
+                    min2 = min1;
+                    pos2 = pos1;
+                    min1 = arr[i];
+                    pos1 = i;
+                } else if (arr[i] < min2) {
+                    min2 = arr[i];
+                    pos2 = i;
+                }
+            }
+            closestArr[0] = pos1;
+            closestArr[1] = pos2;
+        }
+
+        int localAction(int closestRelays[], int ownId) {
+            if (ownId == closestRelays[0] || ownId == closestRelays[1]) {
+                return 1;
+            } else {
+                return 0;
+            }
+        }
+
+        int decideLocalAction(int* arr, int ownId, int numUnits) {
+            int closestRelays[2];
+            findIndexSmallestValues(arr, closestRelays, numUnits);
+            return localAction(closestRelays, ownId);
+        }
+    =}
+
+    output distributedDecision:int
+    input voltageReportAIn:int
+    input voltageReportBIn:int
+    input voltageReportCIn:int
+    input voltageReportDIn:int
+    state voltages:int[] = {0, 0, 0, 0}
+    state numReports:int(0)
+    state result:bool
+
+    reaction(voltageReportAIn) -> distributedDecision {=
+        //printf("Input from A is present.\n");
+        self->voltages[0] = voltageReportAIn->value;
+        self->numReports++;
+
+        if (self->numReports == 4) {
+            //printf("Received all inputs. Deciding best action.");
+            self->result = decideLocalAction(self->voltages, self->ownId, 4);
+            lf_set(distributedDecision, self->result);
+        }
+    =}
+
+    reaction(voltageReportBIn) -> distributedDecision {=
+        //printf("Input from B is present.\n");
+        self->voltages[1] = voltageReportBIn->value;
+        self->numReports++;
+
+        if (self->numReports == 4) {
+            //printf("Received all inputs. Deciding best action.");
+            self->result = decideLocalAction(self->voltages, self->ownId, 4);
+            lf_set(distributedDecision, self->result);
+        }
+    =}
+
+    reaction(voltageReportCIn) -> distributedDecision {=
+        //printf("Input from C is present.\n");
+        self->voltages[2] = voltageReportCIn->value;
+        self->numReports++;
+
+        if (self->numReports == 4) {
+            //printf("Received all inputs. Deciding best action.");
+            self->result = decideLocalAction(self->voltages, self->ownId, 4);
+            lf_set(distributedDecision, self->result);
+        }
+    =}
+
+    reaction(voltageReportDIn) -> distributedDecision {=
+        //printf("Input from D is present.\n");
+        self->voltages[3] = voltageReportDIn->value;
+        self->numReports++;
+
+        if (self->numReports == 4) {
+            //printf("Received all inputs. Deciding best action.");
+            self->result = decideLocalAction(self->voltages, self->ownId, 4);
+            lf_set(distributedDecision, self->result);
+        }
+    =}
+}
+
+reactor CircuitStatus {
+    preamble {=
+        void openCircuit() {
+            // led turns on
+        }
+
+        void closeCircuit() {
+            // led turns off
+        }
+    =}
+
+    input distributedDecision:int
+    input countdown:int
+    logical action breakCircuit;
+    state faultHandled:int;
+
+    reaction(startup){=
+    =}
+
+    reaction(countdown) -> breakCircuit {=
+        self->faultHandled = 0;
+        lf_schedule(breakCircuit, MSEC(150));
+    =} 
+
+    reaction(breakCircuit) {=
+        if (self->faultHandled){
+            // This relay is not the closest to the fault
+            //printf("FAult already handled.\n");
+        } else {
+            //printf("Opening circuit since 150 msec has passed.\n");
+            openCircuit();
+        }
+    =}
+
+    reaction(distributedDecision) -> breakCircuit {=
+        if (distributedDecision->value) {
+            //printf("Distributed decision decided to open this circuit.\n");
+            openCircuit();
+            self->faultHandled = 1;
+        } else {
+            //printf("Distributed decision decided to close this circuit.\n");
+            closeCircuit();
+            self->faultHandled = 1;
+        }
+    =} 
+}
+
+reactor VoltageSensor(id:int(0)) {
+
+    preamble{=
+        #define VOLTAGE_LIMIT 14000U
+
+        // Voltage measurement timeseries
+        int simMeas[4][14] ={{15000,15000,13100,15000,15000,15000,15000,15000,15000,15000,15000,15000,15000,15000,15000},
+                            {15000,15000,11000,15000,15000,15000,15000,15000,15000,15000,15000,15000,15000,15000,15000},
+                            {15000,15000,11200,15000,15000,15000,15000,15000,15000,15000,15000,15000,15000,15000,15000},
+                            {15000,15000,12500,15000,15000,15000,15000,15000,15000,15000,15000,15000,15000,15000,15000}};
+
+        int readSensor(int id, int count) {
+            return simMeas[id][count];
+        }
+    =}
+
+    timer t(1 sec, 50 msec);
+    output[4] measOut:int
+    output startCountdown:int
+    state measCount:int(0)
+
+    reaction(startup){=
+    =}
+
+    reaction(t) -> measOut, startCountdown {=
+
+        // Read simulated measurement 
+        int voltageMeasurement = readSensor(self->id, self->measCount);
+        if (self->measCount == 13) {
+            self->measCount = 0;
+            lf_request_stop();
+        } else {
+            self->measCount++;
+        }
+
+        // Check if short circuit has occured on the line
+        if (voltageMeasurement < VOLTAGE_LIMIT) {
+            // A fault has occured, let other nodes know
+            lf_set(startCountdown, 1);
+            for (int i = 0; i < 4; i++) {
+                lf_set(measOut[i], voltageMeasurement);
+            }
+        }
+    =}
+}
+
+reactor RelayUnit(id:int(0)) {
+    output[4] voltageReportOut:int;
+    input voltageReportAIn:int;
+    input voltageReportBIn:int;
+    input voltageReportCIn:int;
+    input voltageReportDIn:int;
+
+    circuitStatus = new CircuitStatus();
+    voltageSensor = new VoltageSensor(id = id);
+    distAlg = new DistAlg(ownId = id);
+
+    voltageSensor.measOut -> voltageReportOut;
+    voltageSensor.startCountdown -> circuitStatus.countdown;
+
+    voltageReportAIn -> distAlg.voltageReportAIn;
+    voltageReportBIn -> distAlg.voltageReportBIn;
+    voltageReportCIn -> distAlg.voltageReportCIn;
+    voltageReportDIn -> distAlg.voltageReportDIn;
+
+    
+    distAlg.distributedDecision -> circuitStatus.distributedDecision;
+
+}
+
+federated reactor at 192.0.2.2:15047 {
+    unitA = new RelayUnit(id = 0);
+    unitB = new RelayUnit(id = 1);
+    unitC = new RelayUnit(id = 2);
+    unitD = new RelayUnit(id = 3);
+
+    unitA.voltageReportOut -> unitA.voltageReportAIn, 
+                              unitB.voltageReportAIn, 
+                              unitC.voltageReportAIn, 
+                              unitD.voltageReportAIn after 17500 usec;
+
+    unitB.voltageReportOut -> unitA.voltageReportBIn, 
+                              unitB.voltageReportBIn, 
+                              unitC.voltageReportBIn, 
+                              unitD.voltageReportBIn after 17500 usec;
+
+    unitC.voltageReportOut -> unitA.voltageReportCIn, 
+                              unitB.voltageReportCIn, 
+                              unitC.voltageReportCIn, 
+                              unitD.voltageReportCIn after 17500 usec;
+
+    unitD.voltageReportOut -> unitA.voltageReportDIn, 
+                              unitB.voltageReportDIn, 
+                              unitC.voltageReportDIn, 
+                              unitD.voltageReportDIn after 17500 usec;
+
+}
