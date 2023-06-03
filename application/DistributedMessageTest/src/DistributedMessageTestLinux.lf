@@ -52,9 +52,9 @@ reactor Print {
     =}
 }
 
-federated reactor at localhost:8080 {
-    s = new Source(period = 100 usec, iterations = 3000); // 3 msec for lite. Buffere fylles opp raskere enn de tømmes?
+federated reactor at 192.0.2.3:15047 {
+    s = new Source(period = 100 msec, iterations = 300); // 3 msec for lite. Buffere fylles opp raskere enn de tømmes?
     d = new Drain();
-    p = new Print();
+    //p = new Print();
     s.y -> d.x;
 }

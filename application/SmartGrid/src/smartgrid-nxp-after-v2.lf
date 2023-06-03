@@ -54,55 +54,52 @@ reactor DistAlg(ownId:int(0)) {
     input voltageReportBIn:int
     input voltageReportCIn:int
     input voltageReportDIn:int
-    state voltages:int[] // = {0, 0, 0, 0}
+    state voltages:int[]  = {0, 0, 0, 0}
     state numReports:int(0)
     state result:bool
 
-    reaction(voltageReportAIn) -> distributedDecision {=
-        //printf("Input from A is present.\n");
-        self->voltages[0] = voltageReportAIn->value;
-        self->numReports++;
-
-        if (self->numReports == 4) {
-            //printf("Received all inputs. Deciding best action.\n");
+    reaction(voltageReportAIn, voltageReportBIn, voltageReportCIn, voltageReportDIn) -> distributedDecision {=
+        if (voltageReportAIn->is_present && voltageReportBIn->is_present && voltageReportCIn->is_present && voltageReportDIn->is_present) {
+            self->voltages[0] = voltageReportAIn->value;
+            self->voltages[1] = voltageReportBIn->value;
+            self->voltages[2] = voltageReportCIn->value;
+            self->voltages[3] = voltageReportDIn->value;
             self->result = decideLocalAction(self->voltages, self->ownId, 4);
+            //printf("Setting relay %u to %u (1=open,0=close)\n", self->ownId, result);
             lf_set(distributedDecision, self->result);
+        } else {
+            printf("Not all inputs present.\n");
         }
-    =}
+    =} STP(0) {=
+        printf("STP violation: Did not receive inputs in time, opening circuit as default.\n");
 
-    reaction(voltageReportBIn) -> distributedDecision {=
-        //printf("Input from B is present.\n");
-        self->voltages[1] = voltageReportBIn->value;
-        self->numReports++;
-
-        if (self->numReports == 4) {
-            //printf("Received all inputs. Deciding best action.\n");
-            self->result = decideLocalAction(self->voltages, self->ownId, 4);
-            lf_set(distributedDecision, self->result);
+        //debugging
+        if (((lf_time_logical_elapsed() - (voltageReportAIn->intended_tag.time - lf_time_start()) > 0) || 
+           ((lf_time_logical_elapsed() - (voltageReportAIn->intended_tag.time - lf_time_start()) == 0) && 
+           ((lf_tag().microstep - voltageReportAIn->intended_tag.microstep) > 0))) &&
+           (voltageReportAIn->is_present)) {
+            printf("Input from A was tardy.\n");
         }
-    =}
 
-    reaction(voltageReportCIn) -> distributedDecision {=
-        //printf("Input from C is present.\n");
-        self->voltages[2] = voltageReportCIn->value;
-        self->numReports++;
-
-        if (self->numReports == 4) {
-            //printf("Received all inputs. Deciding best action.\n");
-            self->result = decideLocalAction(self->voltages, self->ownId, 4);
-            lf_set(distributedDecision, self->result);
+        if (((lf_time_logical_elapsed() - (voltageReportBIn->intended_tag.time - lf_time_start()) > 0) || 
+           ((lf_time_logical_elapsed() - (voltageReportBIn->intended_tag.time - lf_time_start()) == 0) && 
+           ((lf_tag().microstep - voltageReportBIn->intended_tag.microstep) > 0))) &&
+           (voltageReportBIn->is_present)) {
+            printf("Input from B was tardy.\n");
         }
-    =}
 
-    reaction(voltageReportDIn) -> distributedDecision {=
-        //printf("Input from D is present.\n");
-        self->voltages[3] = voltageReportDIn->value;
-        self->numReports++;
+        if (((lf_time_logical_elapsed() - (voltageReportCIn->intended_tag.time - lf_time_start()) > 0) || 
+           ((lf_time_logical_elapsed() - (voltageReportCIn->intended_tag.time - lf_time_start()) == 0) && 
+           ((lf_tag().microstep - voltageReportCIn->intended_tag.microstep) > 0))) &&
+           (voltageReportCIn->is_present)) {
+            printf("Input from C was tardy.\n");
+        }
 
-        if (self->numReports == 4) {
-            //printf("Received all inputs. Deciding best action.\n");
-            self->result = decideLocalAction(self->voltages, self->ownId, 4);
-            lf_set(distributedDecision, self->result);
+        if (((lf_time_logical_elapsed() - (voltageReportDIn->intended_tag.time - lf_time_start()) > 0) || 
+           ((lf_time_logical_elapsed() - (voltageReportDIn->intended_tag.time - lf_time_start()) == 0) && 
+           ((lf_tag().microstep - voltageReportDIn->intended_tag.microstep) > 0))) &&
+           (voltageReportDIn->is_present)) {
+            printf("Input from D was tardy.\n");
         }
     =}
 }
@@ -181,7 +178,7 @@ reactor VoltageSensor(id:int(0)) {
         }
     =}
 
-    timer t(1 sec, 50 msec);
+    timer t(1 sec, 70 msec);
     output[4] measOut:int
     output startCountdown:int
     state measCount:int(0)

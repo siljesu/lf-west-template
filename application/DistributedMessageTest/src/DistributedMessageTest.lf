@@ -76,9 +76,9 @@ reactor Print {
     =}
 }
 
-federated reactor DistributedMessageTest at 192.0.2.2:15047 {
-    s = new Source(period = 100 usec, iterations = 3000);
+federated reactor DistributedMessageTest at 192.0.2.3:15047 {
+    s = new Source(period = 100 msec, iterations = 300);
     d = new Drain();
-    p = new Print();
+    //p = new Print();
     s.y -> d.x;
 }
